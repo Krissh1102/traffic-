@@ -1,61 +1,50 @@
-import '../models/accident_zone.dart';
+// accident_zones_data.dart
+// ─────────────────────────────────────────────────────────────────────────────
+// AccidentZone model + data helper
+// ─────────────────────────────────────────────────────────────────────────────
 
-/// Sample accident-prone zones data.
-/// Replace with API or local database in production.
-List<AccidentZone> getAccidentZones([double? userLat, double? userLng]) {
-  const baseLat = 12.9716;
-  const baseLng = 77.5946;
+class AccidentZone {
+  final String title;
+  final double latitude;
+  final double longitude;
+  final int accidentCount;
+  final int severityColor;   // 0xFFrrggbb int — pass directly to Color()
+  final double radiusMeters;
 
-  return [
-    AccidentZone(
-      id: 'zone_1',
-      latitude: baseLat + 0.002,
-      longitude: baseLng + 0.001,
-      radiusMeters: 150,
-      title: 'High-risk intersection',
-      description: 'Multiple collisions reported in past 6 months',
-      severityLevel: 5,
-      accidentCount: 12,
-    ),
-    AccidentZone(
-      id: 'zone_2',
-      latitude: baseLat - 0.003,
-      longitude: baseLng + 0.002,
-      radiusMeters: 200,
-      title: 'Sharp curve zone',
-      description: 'Poor visibility during monsoon',
-      severityLevel: 4,
-      accidentCount: 8,
-    ),
-    AccidentZone(
-      id: 'zone_3',
-      latitude: baseLat + 0.001,
-      longitude: baseLng - 0.002,
-      radiusMeters: 120,
-      title: 'School zone crossing',
-      description: 'Peak hour congestion and pedestrian accidents',
-      severityLevel: 3,
-      accidentCount: 5,
-    ),
-    AccidentZone(
-      id: 'zone_4',
-      latitude: baseLat - 0.001,
-      longitude: baseLng - 0.001,
-      radiusMeters: 180,
-      title: 'Highway merge point',
-      description: 'Lane-changing incidents common',
-      severityLevel: 4,
-      accidentCount: 7,
-    ),
-    AccidentZone(
-      id: 'zone_5',
-      latitude: baseLat + 0.004,
-      longitude: baseLng + 0.003,
-      radiusMeters: 100,
-      title: 'Roundabout exit',
-      description: 'Minor collisions during rush hours',
-      severityLevel: 2,
-      accidentCount: 3,
-    ),
-  ];
+  const AccidentZone({
+    required this.title,
+    required this.latitude,
+    required this.longitude,
+    required this.accidentCount,
+    required this.severityColor,
+    required this.radiusMeters,
+  });
+
+  // ── [] operator so zone['key'] works identically to zone.key ──────────────
+  // This prevents NoSuchMethodError if any part of the code still uses
+  // bracket-style access (zone['latitude'] etc.).
+  dynamic operator [](String key) {
+    switch (key) {
+      case 'title':         return title;
+      case 'latitude':      return latitude;
+      case 'longitude':     return longitude;
+      case 'accidentCount': return accidentCount;
+      case 'severityColor': return severityColor;
+      case 'radiusMeters':  return radiusMeters;
+      default:
+        throw ArgumentError('AccidentZone has no field "$key"');
+    }
+  }
+}
+
+// Helper to create AccidentZone from JSON
+AccidentZone accidentZoneFromJson(Map<String, dynamic> json) {
+  return AccidentZone(
+    title: json['title'] as String,
+    latitude: json['latitude'] as double,
+    longitude: json['longitude'] as double,
+    accidentCount: json['accidentCount'] as int,
+    severityColor: json['severityColor'] as int,
+    radiusMeters: json['radiusMeters'] as double,
+  );
 }
