@@ -118,9 +118,9 @@ class _HeatmapLayerState extends State<_HeatmapLayer> {
       final color = _heatColor(t);
       final alpha = ((t - 0.02) / 0.98 * 210).round().clamp(0, 210);
 
-      rgba[i * 4 + 0] = Colors.red.value;
-      rgba[i * 4 + 1] = Colors.green.value;
-      rgba[i * 4 + 2] = Colors.blue.value;
+      rgba[i * 4 + 0] = color.red;
+      rgba[i * 4 + 1] = color.green;
+      rgba[i * 4 + 2] = color.blue;
       rgba[i * 4 + 3] = alpha;
     }
 
@@ -236,6 +236,9 @@ class AiRiskAnalysis {
   }
 }
 
+// ---------------------------------------------------------------------------
+// AI Risk Analysis Service
+// ---------------------------------------------------------------------------
 Future<AiRiskAnalysis> fetchAiRiskAnalysis(double lat, double lon) async {
   final uri = Uri.parse(
     'https://ai-road-risk-intelligence.onrender.com/predict_location?lat=$lat&lon=$lon',
@@ -247,6 +250,9 @@ Future<AiRiskAnalysis> fetchAiRiskAnalysis(double lat, double lon) async {
   throw Exception('Failed to fetch AI analysis: ${response.statusCode}');
 }
 
+// ---------------------------------------------------------------------------
+// AI Risk Summary Bottom Sheet
+// ---------------------------------------------------------------------------
 class _AiRiskSheet extends StatelessWidget {
   final LatLng location;
   final AiRiskAnalysis analysis;
@@ -1642,7 +1648,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 }
 
-
+// ---------------------------------------------------------------------------
+// _FABButton
+// ---------------------------------------------------------------------------
 class _FABButton extends StatelessWidget {
   final VoidCallback? onTap;
   final bool isTablet;
