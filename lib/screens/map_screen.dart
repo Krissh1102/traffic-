@@ -294,10 +294,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   ),
                 );
               }
-              final zones = snapshot.data ?? [];
+              var zones = snapshot.data ?? [];
               _allZones = zones;
 
-              debugPrint('🗺️ MapScreen received ${zones.length} zones');
+              // ⚡ PERFORMANCE FIX: Limit to max 100 zones (sort by severity)
+              if (zones.length > 100) {
+                zones = zones..sort((a, b) => b.severityLevel.compareTo(a.severityLevel));
+                zones = zones.take(100).toList();
+                debugPrint('⚠️ Limited zones from ${_allZones.length} to ${zones.length}');
+              }
+
+              debugPrint('🗺️ MapScreen displaying ${zones.length} zones');
 
               final Map<int, List<AccidentZone>> zonesBySeverity = {};
               for (final zone in zones) {
@@ -316,7 +323,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 options: MapOptions(
                   initialCenter: _initialCenter,
                   initialZoom: _defaultZoom,
-                  // ✅ FIX: Set _mapReady = true once map is initialized
                   onMapReady: () {
                     setState(() => _mapReady = true);
                   },
@@ -325,67 +331,22 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   TileLayer(
                     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.techathon',
+                    maxNativeZoom: 19,
+                    maxZoom: 19,
+                    minZoom: 2,
                   ),
 
-                  // Low Risk (Level 1-2) - Green
+                  // Combined Risk Circles Layer (optimized)
                   CircleLayer(
                     circles: [
-                      for (final zone in zonesBySeverity[1] ?? [])
+                      for (final zone in zones)
                         CircleMarker(
                           point: LatLng(zone.latitude, zone.longitude),
-                          radius: (zone.radiusMeters * 1.5).toDouble(),
+                          radius: 150.0,
                           useRadiusInMeter: true,
-                          color: const Color(0xFF8BC34A).withOpacity(0.4),
-                          borderStrokeWidth: 3,
-                          borderColor: const Color(0xFF8BC34A),
-                        ),
-                      for (final zone in zonesBySeverity[2] ?? [])
-                        CircleMarker(
-                          point: LatLng(zone.latitude, zone.longitude),
-                          radius: (zone.radiusMeters * 1.5).toDouble(),
-                          useRadiusInMeter: true,
-                          color: const Color(0xFF8BC34A).withOpacity(0.4),
-                          borderStrokeWidth: 3,
-                          borderColor: const Color(0xFF8BC34A),
-                        ),
-                    ],
-                  ),
-
-                  // Medium Risk (Level 3) - Orange
-                  CircleLayer(
-                    circles: [
-                      for (final zone in zonesBySeverity[3] ?? [])
-                        CircleMarker(
-                          point: LatLng(zone.latitude, zone.longitude),
-                          radius: (zone.radiusMeters * 1.5).toDouble(),
-                          useRadiusInMeter: true,
-                          color: const Color(0xFFFF9800).withOpacity(0.5),
-                          borderStrokeWidth: 3,
-                          borderColor: const Color(0xFFFF9800),
-                        ),
-                    ],
-                  ),
-
-                  // High Risk (Level 4-5) - Red
-                  CircleLayer(
-                    circles: [
-                      for (final zone in zonesBySeverity[4] ?? [])
-                        CircleMarker(
-                          point: LatLng(zone.latitude, zone.longitude),
-                          radius: (zone.radiusMeters * 1.5).toDouble(),
-                          useRadiusInMeter: true,
-                          color: const Color(0xFFFF5722).withOpacity(0.6),
-                          borderStrokeWidth: 3,
-                          borderColor: const Color(0xFFFF5722),
-                        ),
-                      for (final zone in zonesBySeverity[5] ?? [])
-                        CircleMarker(
-                          point: LatLng(zone.latitude, zone.longitude),
-                          radius: (zone.radiusMeters * 1.5).toDouble(),
-                          useRadiusInMeter: true,
-                          color: const Color(0xFFFF1744).withOpacity(0.7),
-                          borderStrokeWidth: 3,
-                          borderColor: const Color(0xFFFF1744),
+                          color: Color(zone.severityColor).withOpacity(0.3),
+                          borderStrokeWidth: 2,
+                          borderColor: Color(zone.severityColor),
                         ),
                     ],
                   ),

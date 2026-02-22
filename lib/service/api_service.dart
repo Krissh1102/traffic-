@@ -57,35 +57,80 @@ class ApiService {
   static List<AccidentZone> _getStaticFallbackZones() {
     debugPrint('Using static fallback zones');
     return [
+      // Critical Risk (Level 5) - Deep Red
       AccidentZone(
-        id: 'fallback_1',
+        id: 'fallback_5_1',
         latitude: 19.0760,
         longitude: 72.8777,
         radiusMeters: 300,
-        title: 'High Risk Zone - Mumbai',
-        description: 'Fallback data: High accident frequency area',
-        severityLevel: 4,
-        accidentCount: 12,
+        title: 'CRITICAL - Western Express Highway',
+        description: 'Critical accident hotspot - Highest risk area',
+        severityLevel: 5,
+        accidentCount: 25,
       ),
+      // High Risk (Level 4) - Orange Red
       AccidentZone(
-        id: 'fallback_2',
+        id: 'fallback_4_1',
         latitude: 19.0330,
         longitude: 73.0297,
         radiusMeters: 250,
-        title: 'Moderate Risk Zone',
-        description: 'Fallback data: Moderate accident frequency area',
-        severityLevel: 3,
-        accidentCount: 6,
+        title: 'HIGH RISK - Eastern Freeway',
+        description: 'High accident frequency - Very dangerous',
+        severityLevel: 4,
+        accidentCount: 18,
       ),
       AccidentZone(
-        id: 'fallback_3',
+        id: 'fallback_4_2',
         latitude: 19.1136,
         longitude: 72.8697,
+        radiusMeters: 280,
+        title: 'HIGH RISK - Sion Circle',
+        description: 'High accident frequency area',
+        severityLevel: 4,
+        accidentCount: 15,
+      ),
+      // Medium Risk (Level 3) - Orange
+      AccidentZone(
+        id: 'fallback_3_1',
+        latitude: 19.0596,
+        longitude: 72.8295,
         radiusMeters: 200,
-        title: 'Critical Risk Zone',
-        description: 'Fallback data: Critical accident frequency area',
-        severityLevel: 5,
-        accidentCount: 20,
+        title: 'MEDIUM RISK - Andheri',
+        description: 'Moderate accident frequency',
+        severityLevel: 3,
+        accidentCount: 10,
+      ),
+      AccidentZone(
+        id: 'fallback_3_2',
+        latitude: 19.1136,
+        longitude: 72.9260,
+        radiusMeters: 180,
+        title: 'MEDIUM RISK - Vile Parle',
+        description: 'Moderate accident risk zone',
+        severityLevel: 3,
+        accidentCount: 8,
+      ),
+      // Low Risk (Level 2) - Amber
+      AccidentZone(
+        id: 'fallback_2_1',
+        latitude: 19.0176,
+        longitude: 72.8479,
+        radiusMeters: 150,
+        title: 'LOW RISK - Colaba',
+        description: 'Low accident frequency',
+        severityLevel: 2,
+        accidentCount: 3,
+      ),
+      // Minimal Risk (Level 1) - Green
+      AccidentZone(
+        id: 'fallback_1_1',
+        latitude: 19.2183,
+        longitude: 72.9781,
+        radiusMeters: 120,
+        title: 'MINIMAL RISK - Thane',
+        description: 'Very low accident frequency',
+        severityLevel: 1,
+        accidentCount: 1,
       ),
     ];
   }
@@ -121,7 +166,19 @@ class ApiService {
         }
 
         if (data.isEmpty) {
-          debugPrint('Warning: No risky locations found in API response');
+          debugPrint('⚠️ API returned empty data - using fallback zones');
+          return _getStaticFallbackZones();
+        }
+        
+        // Validate zones have valid coordinates
+        data = data.where((location) {
+          final lat = double.tryParse(location['latitude']?.toString() ?? location['lat']?.toString() ?? '0');
+          final lng = double.tryParse(location['longitude']?.toString() ?? location['lng']?.toString() ?? '0');
+          return lat != null && lat != 0 && lng != null && lng != 0;
+        }).toList();
+        
+        if (data.isEmpty) {
+          debugPrint('⚠️ API data has no valid coordinates - using fallback zones');
           return _getStaticFallbackZones();
         }
 
@@ -195,7 +252,16 @@ class ApiService {
         }
         debugPrint('📊 Severity distribution: $severityCount');
 
-        return zones;
+        // ✅ Limit zones to prevent freezing (cap at 100 zones, prioritize high-risk)
+        List<AccidentZone> finalZones = zones;
+        if (finalZones.length > 100) {
+          // Sort by severity descending so high-risk zones are displayed first
+          finalZones.sort((a, b) => b.severityLevel.compareTo(a.severityLevel));
+          finalZones = finalZones.take(100).toList();
+        }
+        
+        debugPrint('📌 Returning ${finalZones.length} zones for display');
+        return finalZones;
       } else {
         debugPrint('API returned status ${response.statusCode}');
         return _getStaticFallbackZones();
