@@ -310,9 +310,6 @@ class _AiLoadingSheetState extends State<AiLoadingSheet>
   }
 }
 
-// ---------------------------------------------------------------------------
-// Small reusable sub-widgets
-// ---------------------------------------------------------------------------
 class _AiBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {

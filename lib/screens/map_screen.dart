@@ -11,6 +11,7 @@ import 'dart:convert';
 import 'package:latlong2/latlong.dart';
 import 'package:techathon/models/search_loc.dart';
 import '../data/accident_zones_data.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 
 // ---------------------------------------------------------------------------
 // Proper Heatmap Layer — pixel-buffer Gaussian density accumulation
@@ -219,20 +220,19 @@ class AiRiskAnalysis {
     required this.primaryDrivers,
     required this.recommendedActions,
   });
+}
 
-  factory AiRiskAnalysis.fromJson(Map<String, dynamic> json) {
-    return AiRiskAnalysis(
-      riskLevel: json['risk_level'] as String,
-      riskScore: (json['risk_score'] as num).toDouble(),
-      riskSummary: json['explanation']['risk_summary'] as String,
-      primaryDrivers: (json['explanation']['primary_drivers'] as List)
-          .map((e) => e.toString())
-          .toList(),
-      recommendedActions:
-          (json['recommendation']['recommended_actions'] as List)
-              .map((e) => e.toString())
-              .toList(),
-    );
+// ---------------------------------------------------------------------------
+// Risk Score Normalizer
+// Bands:  Low = 0.00–0.40 | Medium = 0.41–0.70 | High = 0.71–1.00
+// ---------------------------------------------------------------------------
+({String riskLevel, double riskScore}) _normalizeRisk(double rawScore) {
+  if (rawScore <= 0.40) {
+    return (riskLevel: 'Low', riskScore: rawScore.clamp(0.0, 0.40));
+  } else if (rawScore <= 0.70) {
+    return (riskLevel: 'Medium', riskScore: rawScore.clamp(0.41, 0.70));
+  } else {
+    return (riskLevel: 'High', riskScore: rawScore.clamp(0.71, 1.0));
   }
 }
 
@@ -240,14 +240,68 @@ class AiRiskAnalysis {
 // AI Risk Analysis Service
 // ---------------------------------------------------------------------------
 Future<AiRiskAnalysis> fetchAiRiskAnalysis(double lat, double lon) async {
+  // ── Step 1: Existing risk-score API ──────────────────────────────────────
   final uri = Uri.parse(
     'https://ai-road-risk-intelligence.onrender.com/predict_location?lat=$lat&lon=$lon',
   );
   final response = await http.post(uri).timeout(const Duration(seconds: 30));
-  if (response.statusCode == 200) {
-    return AiRiskAnalysis.fromJson(jsonDecode(response.body));
+  if (response.statusCode != 200) {
+    throw Exception('Failed to fetch risk score: ${response.statusCode}');
   }
-  throw Exception('Failed to fetch AI analysis: ${response.statusCode}');
+
+  final scoreJson = jsonDecode(response.body) as Map<String, dynamic>;
+  final rawScore = (scoreJson['risk_score'] as num).toDouble();
+
+  // ── Step 2: Normalize score → consistent level + clamped score ───────────
+  final normalized = _normalizeRisk(rawScore);
+  final riskLevel = normalized.riskLevel;
+  final riskScore = normalized.riskScore;
+
+  // ── Step 3: Gemini for natural-language narrative ─────────────────────────
+  final model = GenerativeModel(
+    model: 'gemini-2.5-flash',
+    apiKey: 'AIzaSyCWy4pFkoocKlJzwG4IWkDbpR4rEBZzXf4',
+  );
+
+  final prompt =
+      '''
+You are a road safety analyst. A machine-learning model has assessed the accident risk for the road location at coordinates ($lat, $lon).
+
+Assessment result:
+- Risk Level: $riskLevel  (Low = 0–40%, Medium = 41–70%, High = 71–100%)
+- Risk Score: ${(riskScore * 100).toStringAsFixed(1)}%
+
+Using your knowledge of typical road hazards for this type of score and location, respond ONLY with the following JSON — no markdown, no extra text:
+
+{
+  "riskSummary": "A 2–3 sentence explanation of why this location carries a $riskLevel risk level at ${(riskScore * 100).toStringAsFixed(1)}%.",
+  "primaryDrivers": ["Short driver label 1", "Short driver label 2", "Short driver label 3"],
+  "recommendedActions": ["Actionable advice 1", "Actionable advice 2", "Actionable advice 3"]
+}
+''';
+
+  final geminiResponse = await model.generateContent([Content.text(prompt)]);
+  final rawText = (geminiResponse.text ?? '{}').trim();
+
+  // Strip any accidental markdown fences Gemini might add
+  final cleaned = rawText
+      .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
+      .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
+      .trim();
+
+  final geminiJson = jsonDecode(cleaned) as Map<String, dynamic>;
+
+  return AiRiskAnalysis(
+    riskLevel: riskLevel,
+    riskScore: riskScore,
+    riskSummary: geminiJson['riskSummary'] as String,
+    primaryDrivers: (geminiJson['primaryDrivers'] as List)
+        .map((e) => e.toString())
+        .toList(),
+    recommendedActions: (geminiJson['recommendedActions'] as List)
+        .map((e) => e.toString())
+        .toList(),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -729,7 +783,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   bool _showHeatmap = false;
   List _allZones = [];
 
-  // Double-tap selected location
   LatLng? _selectedLocation;
 
   static const double _defaultZoom = 15.0;
@@ -761,14 +814,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // ── Double tap handler ────────────────────────────────────────────────────
   void _onDoubleTap(TapPosition tapPosition, LatLng latlng) {
     setState(() => _selectedLocation = latlng);
     _showAiAnalysis(latlng);
   }
 
   Future<void> _showAiAnalysis(LatLng location) async {
-    // Show loading sheet first
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -784,11 +835,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       );
 
       if (!mounted) return;
-
-      // Close loading sheet
       Navigator.of(context).pop();
 
-      // Show result sheet
       showModalBottomSheet(
         context: context,
         backgroundColor: Colors.transparent,
@@ -804,7 +852,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.of(context).pop(); // close loading
+      Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('AI analysis failed: $e'),
@@ -967,7 +1015,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             options: MapOptions(
               initialCenter: _initialCenter,
               initialZoom: _defaultZoom,
-              onTap: _onDoubleTap, // ← Double-tap handler
+              onTap: _onDoubleTap,
             ),
             children: [
               TileLayer(
@@ -1054,7 +1102,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   ],
                 ),
 
-              // ── Double-tap selected location pin ─────────────────────
+              // ── Selected location pin ────────────────────────────────
               if (_selectedLocation != null)
                 MarkerLayer(
                   markers: [
@@ -1143,7 +1191,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           if (_showHeatmap && _allZones.isNotEmpty)
             Positioned(bottom: 110, left: 16, child: _buildLegend()),
 
-          // ── Double-tap hint tooltip ─────────────────────────────────
+          // ── Tap hint tooltip ────────────────────────────────────────
           Positioned(
             bottom: 110,
             right: 16,
@@ -1165,7 +1213,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     Icon(Icons.touch_app, color: Colors.white70, size: 14),
                     SizedBox(width: 6),
                     Text(
-                      'Double-tap for AI analysis',
+                      'Tap for AI analysis',
                       style: TextStyle(color: Colors.white70, fontSize: 11),
                     ),
                   ],
@@ -1590,7 +1638,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
             ],
             SizedBox(height: isTablet ? 16 : 12),
-            // AI analysis button for zone
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(

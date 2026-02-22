@@ -37,11 +37,12 @@ dependencies:
 
   # Map and location
   flutter_map: ^8.2.0
+  google_generative_ai: ^0.4.7
   latlong2: ^0.9.1
   geolocator: ^14.0.2
   http: ^1.6.0
   flutter_local_notifications: ^20.1.0
-
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter

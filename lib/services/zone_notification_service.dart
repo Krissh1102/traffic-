@@ -141,7 +141,7 @@ class ZoneNotificationService {
     }
   }
 
-  // ── Notification helpers ──────────────────────────────────────────────────
+  
   Future<void> _fireNotification({
     required String title,
     required String body,
@@ -149,7 +149,7 @@ class ZoneNotificationService {
   }) async {
     if (!_initialized) await initialize();
 
-    // Define constants for notification colors (ARGB int)
+ 
     const int redColor = 0xFFFF0000;
     const int greenColor = 0xFF4CAF50;
 
